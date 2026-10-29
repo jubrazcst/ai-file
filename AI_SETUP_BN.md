@@ -6,16 +6,16 @@
 - TOKEN, GUILD_ID, CHANNEL_ID, SELF_MUTE, SELF_DEAF, status এবং python main.py entry point একই।
 - keep_alive.py, requirements.txt, pyproject.toml, README.md, LICENSE original ZIP-এর সঙ্গে byte-for-byte একই।
 - main.py-এ AI module import, responder তৈরি, incoming-message/heartbeat loop ও reconnect exception handling যোগ হয়েছে। Voice mute/deaf string actual JSON boolean-এ রূপান্তর করা হয়েছে।
-- নতুন openrouter_ai.py-তে OpenRouter reply logic। API key/model না দিলে AI disabled থাকে।
+- নতুন openrouter_ai.py-তে OpenRouter reply logic। API key না দিলে AI disabled থাকে। Model optional; ফাঁকা থাকলে OpenRouter account default ব্যবহার হয়।
 - নতুন feature দিতে main.py-এর সংশ্লিষ্ট অংশ বদলানো আবশ্যক; পুরো source byte-for-byte অপরিবর্তিত দাবি করা হচ্ছে না।
 
 ## Setup: একই Secrets/Environment-এ যোগ করুন
-আগের Secrets বদলাবেন না। নতুন দুটি দিন:
+আগের Secrets বদলাবেন না। OPENROUTER_API_KEY দিন; model দেওয়া বাধ্যতামূলক নয়:
 
 | Name | Value |
 | --- | --- |
 | OPENROUTER_API_KEY | নিজের OpenRouter API key |
-| OPENROUTER_MODEL | নির্বাচিত text model-এর exact ID |
+| OPENROUTER_MODEL | Optional: নির্বাচিত text model-এর exact ID; default চাইলে বাদ দিন |
 
 OpenRouter key: https://openrouter.ai/settings/keys
 Model list: https://openrouter.ai/models
@@ -47,7 +47,7 @@ python main.py
 | AI_COOLDOWN_SECONDS | 8 | 1–3600; একই member/channel-এর request interval |
 | AI_MEMORY_TURNS | 6 | 1–12; question-answer pair |
 | AI_MEMORY_TTL_SECONDS | 1800 | 60–86400; idle expiry |
-| AI_MAX_TOKENS | 600 | 32–2000; answer token limit |
+| AI_MAX_TOKENS | 200 | 32–2000; answer token limit |
 | AI_TEMPERATURE | 0.7 | 0–2; model must support parameter |
 | AI_HOURLY_REQUEST_LIMIT | 60 | 1–10000; logical jobs per process window |
 | AI_REPLY_PREFIX | AI: followed by space | displayed reply prefix |
@@ -70,6 +70,15 @@ Policy: https://support.discord.com/hc/en-us/articles/115002192352-Automated-Use
 ```
 python -m unittest test_openrouter_ai -v
 ```
-১৫টি offline mocked test পাস: trigger/filters, duplicate/pending/hourly cap, queue bound, no-key disable, API payload/auth separation, retry handling, malformed output, Discord denial pause, no-ping replies, memory reset/isolation, emoji splitting এবং gateway READY/heartbeat/message dispatch। সব Python file syntax parse হয়েছে।
+১৯টি offline mocked test পাস: trigger/filters, duplicate/pending/hourly cap, queue bound, no-key disable, API payload/auth separation, retry handling, malformed output, Discord denial pause, no-ping replies, memory reset/isolation, emoji splitting এবং gateway READY/heartbeat/message dispatch। সব Python file syntax parse হয়েছে।
 
 Real token/API দিয়ে login, gateway events, voice presence, permissions, provider model ও live reply পরীক্ষা হয়নি। নিজস্ব অনুমোদিত test channel-এ আগে যাচাই করুন।
+
+## Render-এ এই সংশোধন লাগানো
+এই আপডেটে শুধু runtime file openrouter_ai.py বদলেছে; আগের main.py বা TOKEN setup বদলাবেন না। ZIP থেকে openrouter_ai.py GitHub repository-র একই file-এর জায়গায় দিন এবং commit করুন।
+Render → আপনার service → Environment-এ OPENROUTER_API_KEY নামটি ঠিক রাখুন, value-তে শুধু API key দিন। AI_ENABLED=false থাকলে true করুন। Default model চাইলে OPENROUTER_MODEL মুছে দিন বা ফাঁকা রাখুন। তারপর Save, rebuild, and deploy করুন যাতে নতুন code ও settings দুটোই চালু হয়।
+Expected log: [AI] Enabled for mentions/replies; model=OpenRouter account default
+এই log configuration enabled বোঝায়; key/credit/model live validation হয় প্রথম প্রশ্নে।
+উত্তর ১–২ ছোট বাক্য দেওয়ার নির্দেশ, default ২০০ output tokens এবং সর্বোচ্চ ৫০০ characters।
+Configured GUILD_ID-এর server-এ অন্য account থেকে @আপনার-account প্রশ্ন লিখে পরীক্ষা করুন। Reply ওই প্রশ্নের message-এই যাবে; অন্য member-কে আলাদা DM নয়।
+Model বাদ দিলে account/payer default ব্যবহারের documentation: https://openrouter.ai/docs/api/reference/overview

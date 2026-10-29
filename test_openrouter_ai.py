@@ -85,6 +85,37 @@ class Tests(unittest.TestCase):
             with self.assertRaises(AIError): self.ai.completion([], 'hi')
         self.assertEqual(post.call_count,1)
 
+    def test_default_model_with_key_only(self):
+        for model in (None, '', '   '):
+            if model is None: os.environ.pop('OPENROUTER_MODEL', None)
+            else: os.environ['OPENROUTER_MODEL'] = model
+            with patch('builtins.print'): ai = AIResponder('existing', '1', False)
+            self.assertTrue(ai.active)
+            with patch('openrouter_ai.requests.post', return_value=response()) as post:
+                ai.completion([], 'hi')
+            self.assertNotIn('model', post.call_args.kwargs['json'])
+
+    def test_explicit_disable(self):
+        os.environ['AI_ENABLED'] = 'false'
+        with patch('builtins.print'): ai = AIResponder('existing', '1', False)
+        self.assertFalse(ai.active)
+
+    def test_short_answer(self):
+        with patch('openrouter_ai.requests.post', return_value=response(answer='ক' * 1000)):
+            self.assertEqual(len(self.ai.completion([], 'hi')), 500)
+        self.assertEqual(self.ai.max_tokens, 200)
+
+    def test_mention_question_to_provider_then_reply_to_same_message(self):
+        e = event()
+        self.assertTrue(self.ai.submit(e))
+        with patch('openrouter_ai.requests.post', side_effect=[response(answer='হ্যালো'), response()]) as post:
+            self.ai.process(('30', '20', '2'), e)
+        provider, discord = post.call_args_list
+        self.assertEqual(provider.kwargs['json']['messages'][-1]['content'], 'hello')
+        self.assertTrue(discord.args[0].endswith('/channels/20/messages'))
+        self.assertEqual(discord.kwargs['json']['message_reference']['message_id'], '10')
+        self.assertEqual(discord.kwargs['json']['content'], 'AI: হ্যালো')
+
     def test_retry_limit(self):
         with patch('openrouter_ai.requests.post', side_effect=[response(503),response()]) as post, patch('openrouter_ai.time.sleep'):
             self.assertEqual(self.ai.completion([], 'hi'), 'hello')
