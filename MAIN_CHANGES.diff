@@ -1,0 +1,46 @@
+--- original/main.py
++++ updated/main.py
+@@ -5,6 +5,7 @@
+ import requests
+ import websocket
+ from keep_alive import keep_alive
++from openrouter_ai import AIResponder, gateway_loop
+ 
+ status = "online" #online/dnd/idle
+ 
+@@ -30,23 +31,30 @@
+ discriminator = userinfo["discriminator"]
+ userid = userinfo["id"]
+ 
++ai = AIResponder(usertoken, userid)
++
+ def joiner(token, status):
+     ws = websocket.WebSocket()
+     ws.connect('wss://gateway.discord.gg/?v=9&encoding=json')
+     start = json.loads(ws.recv())
+     heartbeat = start['d']['heartbeat_interval']
+     auth = {"op": 2,"d": {"token": token,"properties": {"$os": "Windows 10","$browser": "Google Chrome","$device": "Windows"},"presence": {"status": status,"afk": False}},"s": None,"t": None}
+-    vc = {"op": 4,"d": {"guild_id": GUILD_ID,"channel_id": CHANNEL_ID,"self_mute": SELF_MUTE,"self_deaf": SELF_DEAF}}
++    vc = {"op": 4,"d": {"guild_id": GUILD_ID,"channel_id": CHANNEL_ID,"self_mute": str(SELF_MUTE).lower() == "true","self_deaf": str(SELF_DEAF).lower() == "true"}}
+     ws.send(json.dumps(auth))
+-    ws.send(json.dumps(vc))
+-    time.sleep(heartbeat / 1000)
+-    ws.send(json.dumps({"op": 1,"d": None}))
++    # Keep the existing connection alive and receive mention/reply events.
++    try:
++        gateway_loop(ws, heartbeat, ai, vc)
++    finally:
++        ws.close()
+ 
+ def run_joiner():
+   os.system("clear")
+   print(f"Logged in as {username}#{discriminator} ({userid}).")
+   while True:
+-    joiner(usertoken, status)
++    try:
++      joiner(usertoken, status)
++    except (websocket.WebSocketException, OSError, ValueError):
++      print("[Connection] Disconnected; retrying in 30 seconds.")
+     time.sleep(30)
+ 
+ keep_alive()
